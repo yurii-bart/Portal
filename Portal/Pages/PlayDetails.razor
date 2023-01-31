@@ -1,0 +1,182 @@
+﻿@page "/plays"
+@inject PlayModelService playModelService
+@using Portal.Data.Enums
+@using Portal.Data.Models
+@using Portal.Services.ModelServices.Plays
+@using Portal.Services.Reports
+
+<PageTitle>plays</PageTitle>
+
+<button class="btn btn-primary mb-2" @onclick="@(() => CreateOrEditModalShow())">Add</button>
+<div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var play in plays)
+            {
+                <tr>
+                    <td>@play.Name</td>
+                    <td>@play.Type</td>
+                    <td>
+                        <button class="btn btn-secondary" @onclick="(() => CreateOrEditModalShow(play))">Edit</button>
+                        <button class="btn btn-danger" @onclick="(() => DeleteModalShow(play))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showCreateOrUpdateModal)
+{
+    <div class="modal fade show" style="display:block" aria-modal="true" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">@(isEdit ? "Edit" : "Create") play</h4>
+                    <button type="button" class="close" @onclick="@CreateOrEditModalCancel">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Name</span>
+                        <input type="text" class="form-control" @bind="createOrEditPlay.Name">
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Type</span>
+                        <select class="form-select"
+                            value="@createOrEditPlay.Type"
+                            @onchange="@(e => createOrEditPlay.Type = (PlayType)Enum.Parse(typeof(PlayType), e.Value.ToString()))">
+
+                            @foreach (var type in Enum.GetValues(typeof(PlayType)))
+                            {
+                                <option value="@type">@type</option>
+                            }
+
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" @onclick="@CreateOrEditModalCancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick=@CreateOrEditModalOk>@(isEdit ? "Edit" : "Create")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+@if (showDeleteModal)
+{
+    <div class="modal fade show" style="display:block" aria-modal="true" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h4 class="modal-title">Confirm action</h4>
+                    <button type="button" class="close" @onclick="@DeleteModalCancel">&times;</button>
+                </div>
+
+                <!-- Modal body -->
+                <div class="modal-body">
+                    @if (deleteplay != null)
+                    {
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@deleteplay.Name</td>
+                                    <td>@deleteplay.Type</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    }
+                </div>
+
+                <!-- Modal footer -->
+                <div class="modal-footer">
+                    <button type="button" class="btn" @onclick="@DeleteModalCancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick=@DeleteModalOk>Delete</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Play> plays = new List<Play>();
+    public Play createOrEditPlay = null!;
+    public Play deleteplay = null!;
+
+    private bool showCreateOrUpdateModal = false;
+    private bool showDeleteModal = false;
+
+    private bool isEdit => !string.IsNullOrEmpty(createOrEditPlay?.Id);
+
+    void CreateOrEditModalShow(Play play = null!)
+    {
+        if(play == null)
+        {
+            createOrEditPlay = new Play();
+        }
+        else
+        {
+            createOrEditPlay = play;
+        }
+
+        showCreateOrUpdateModal = true;
+    }
+    void CreateOrEditModalCancel()
+    {
+        createOrEditPlay = null!;
+        showCreateOrUpdateModal = false;
+    }
+    async Task CreateOrEditModalOk()
+    {
+        if (string.IsNullOrEmpty(createOrEditPlay.Id))
+        {
+            var play = await playModelService.CreateAsync(createOrEditPlay);
+            plays.Add(play);
+        }
+        else
+        {
+            await playModelService.UpdateAsync(createOrEditPlay.Id, createOrEditPlay);
+            plays.RemoveAll(x=> x.Id == createOrEditPlay.Id);
+            plays.Add(createOrEditPlay);
+        }
+
+        CreateOrEditModalCancel();
+    }
+
+    void DeleteModalShow(Play play)
+    {
+        deleteplay = play;
+        showDeleteModal = true;
+    }
+    void DeleteModalCancel()
+    {
+        deleteplay = null!;
+        showDeleteModal = false;
+    }
+    async Task DeleteModalOk()
+    {
+        await playModelService.DeleteAsync(deleteplay.Id);
+        plays.Remove(deleteplay);
+        DeleteModalCancel();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        plays = await playModelService.GetAllAsync();
+    }
+}

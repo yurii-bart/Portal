@@ -1,0 +1,303 @@
+﻿@page "/"
+@page "/invoices"
+@inject InvoiceModelService invoiceModelService
+@inject ReportService reportService;
+@inject PlayModelService playModelService
+@using Portal.Data.Models
+@using Portal.Services.ModelServices.Invoices
+@using Portal.Services.ModelServices.Plays
+@using Portal.Services.Reports
+
+<PageTitle>Invoices</PageTitle>
+
+<button class="btn btn-primary mb-2" @onclick="@(() => CreateOrEditModalShow())">Add</button>
+<div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th scope="col">Customer Name</th>
+                <th scope="col">Due Date</th>
+                <th scope="col">Performances Count</th>
+                <th scope="col">Orders Count</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var invoice in invoices)
+            {
+                <tr>
+                    <td>@invoice.CustomerName</td>
+                    <td>@invoice.DueDate</td>
+                    <td>
+                        @foreach (var performance in invoice.Performances ?? new List<Performance>())
+                        {
+                            <p class="p-0 m-0">Audience: @performance.Audience</p>
+                        }
+                    </td>
+                    <td>
+                        @foreach (var order in invoice.Orders ?? new List<Order>())
+                        {
+                            <p class="p-0 m-0">Amount: @order.Amount</p>
+                        }
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary" @onclick="(() => ReportModalShow(invoice.Id, ReportType.Html))">Generate HTML Report</button>
+                        <button class="btn btn-secondary" @onclick="(() => ReportModalShow(invoice.Id, ReportType.PlainText))">Generate Text Report</button>
+                        <button class="btn btn-secondary" @onclick="(() => CreateOrEditModalShow(invoice))">Edit</button>
+                        <button class="btn btn-danger" @onclick="(() => DeleteModalShow(invoice))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (showCreateOrUpdateModal)
+{
+    <div class="modal fade show" style="display:block" aria-modal="true" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">@(isEdit ? "Edit" : "Create") Invoice</h4>
+                    <button type="button" class="close" @onclick="@CreateOrEditModalCancel">&times;</button>
+                </div>
+
+                @if (plays.Count < 2)
+                {
+                    <h4 class="my-5 mx-3">Please create at least 2 Plays, and then create invoice.</h4>
+                }
+                else
+                {
+                    <div class="modal-body">
+                        <div class="input-group mb-3">
+                            <span class="input-group-text">Customer Name</span>
+                            <input type="text" class="form-control" @bind="createOrEditInvoice.CustomerName">
+                        </div>
+                        <div class="input-group mb-3">
+                            <span class="input-group-text">Due Date</span>
+                            <input type="datetime" class="form-control" @bind="createOrEditInvoice.DueDate">
+                        </div>
+                        <button type="button" class="btn btn-secondary mb-3" @onclick="@CreateModalAddOrder">Add Order</button>
+                        <button type="button" class="btn btn-secondary mb-3" @onclick=@CreateModalRemoveOrder>Remove Order</button>
+                        @for (int i = 0; i < createOrEditInvoice.Performances.Count; i++)
+                        {
+                            var iCopy = i;
+
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Play</span>
+                                <select class="form-select" value="@createOrEditInvoice.Performances[iCopy].PlayId"
+                            @onchange="@(e => createOrEditInvoice.Performances[iCopy].PlayId = e.Value.ToString())">
+                                    @foreach (var play in plays)
+                                    {
+                                        <option value="@play.Id">@play.Id</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Audience</span>
+                                <input type="number" class="form-control"
+                           value="@createOrEditInvoice.Performances[i].Audience"
+                           @onchange="@(e => createOrEditInvoice.Performances[iCopy].Audience = int.Parse(e.Value.ToString()))">
+                            </div>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Order Amount</span>
+                                <input type="number" class="form-control"
+                           value="@createOrEditInvoice.Orders[i].Amount"
+                           @onchange="@(e => createOrEditInvoice.Orders[iCopy].Amount = decimal.Parse(e.Value.ToString()))">
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" @onclick="@CreateOrEditModalCancel">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick=@CreateOrEditModalOk>@(isEdit ? "Edit" : "Create")</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+@if (showDeleteModal)
+{
+    <div class="modal fade show" style="display:block" aria-modal="true" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h4 class="modal-title">Confirm action</h4>
+                    <button type="button" class="close" @onclick="@DeleteModalCancel">&times;</button>
+                </div>
+
+                <!-- Modal body -->
+                <div class="modal-body">
+                    @if (deleteInvoice != null)
+                    {
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Customer Name</th>
+                                    <th scope="col">Performances</th>
+                                    <th scope="col">Orders</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@deleteInvoice.CustomerName</td>
+                                    <td>
+                                        @foreach (var performance in deleteInvoice.Performances ?? new List<Performance>())
+                                        {
+                                            <p class="p-0 m-0">Audience: @performance.Audience</p>
+                                        }
+                                    </td>
+                                    <td>
+                                        @foreach (var order in deleteInvoice.Orders ?? new List<Order>())
+                                        {
+                                            <p class="p-0 m-0">Amount: @order.Amount</p>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    }
+                </div>
+
+                <!-- Modal footer -->
+                <div class="modal-footer">
+                    <button type="button" class="btn" @onclick="@DeleteModalCancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick=@DeleteModalOk>Delete</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+@if(showReportModal)
+{
+    <div class="modal fade show" style="display:block" aria-modal="true" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+
+                    <!-- Modal Header -->
+                    <div class="modal-header">
+                        <h4 class="modal-title">Generated Report</h4>
+                        <button type="button" class="close" @onclick="@ReportModalCancel">&times;</button>
+                    </div>
+
+                    <!-- Modal body -->
+                    <div class="modal-body">
+                        <div class="input-group mb-3">
+                            <div class="form-floating">
+                                <textarea class="form-control" style="height:300px;width:300px;">@report</textarea>
+                                <label for="floatingTextarea2">Report</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal footer -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn" @onclick="@ReportModalCancel">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+}
+
+@code {
+    private List<Invoice> invoices = new List<Invoice>();
+    private List<Play> plays = new List<Play>();
+
+    public Invoice createOrEditInvoice = null!;
+    public Invoice deleteInvoice = null!;
+    public string report = null!;
+
+    private bool showCreateOrUpdateModal = false;
+    private bool showDeleteModal = false;
+    private bool showReportModal = false;
+
+    private bool isEdit => !string.IsNullOrEmpty(createOrEditInvoice?.Id);
+
+    void CreateOrEditModalShow(Invoice invoice = null!)
+    {
+        if(invoice == null)
+        {
+            createOrEditInvoice = new Invoice()
+            {
+                Orders = new List<Order>(),
+                Performances = new List<Performance>()
+            };
+        }
+        else
+        {
+            createOrEditInvoice = invoice;
+        }
+
+        showCreateOrUpdateModal = true;
+    }
+    void CreateOrEditModalCancel()
+    {
+        createOrEditInvoice = null!;
+        showCreateOrUpdateModal = false;
+    }
+    void CreateModalAddOrder()
+    {
+        createOrEditInvoice.Orders.Add(new Order());
+        createOrEditInvoice.Performances.Add(new Performance());
+    }
+    void CreateModalRemoveOrder()
+    {
+        if (createOrEditInvoice.Orders.Any())
+            createOrEditInvoice.Orders = createOrEditInvoice.Orders.SkipLast(1).ToList();
+        if (createOrEditInvoice.Performances.Any())
+            createOrEditInvoice.Performances = createOrEditInvoice.Performances.SkipLast(1).ToList();
+    }
+    async Task CreateOrEditModalOk()
+    {
+        if (string.IsNullOrEmpty(createOrEditInvoice.Id))
+        {
+            var invoice = await invoiceModelService.CreateAsync(createOrEditInvoice);
+            invoices.Add(invoice);
+        }
+        else
+        {
+            await invoiceModelService.UpdateAsync(createOrEditInvoice.Id, createOrEditInvoice);
+            invoices.RemoveAll(x=> x.Id == createOrEditInvoice.Id);
+            invoices.Add(createOrEditInvoice);
+        }
+
+        CreateOrEditModalCancel();
+    }
+
+    void DeleteModalShow(Invoice invoice)
+    {
+        deleteInvoice = invoice;
+        showDeleteModal = true;
+    }
+    void DeleteModalCancel()
+    {
+        deleteInvoice = null!;
+        showDeleteModal = false;
+    }
+    async Task DeleteModalOk()
+    {
+        await invoiceModelService.DeleteAsync(deleteInvoice.Id);
+        invoices.Remove(deleteInvoice);
+        DeleteModalCancel();
+    }
+
+    async Task ReportModalShow(string id, ReportType reportType)
+    {
+        report = await reportService.GenerateReport(id, reportType);
+        showReportModal = true;
+    }
+    void ReportModalCancel()
+    {
+        report = null!;
+        showReportModal = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        invoices = await invoiceModelService.GetAllAsync();
+        plays = await playModelService.GetAllAsync();
+    }
+}
